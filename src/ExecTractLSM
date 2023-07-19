@@ -1,0 +1,567 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Code that executes the tractable LSM according to what is in the run
+file. The line to run it is: ExecTractLSM irun.txt
+
+This file is part of the TractLSM project.
+
+Copyright (c) 2023 Manon E. B. Sabot
+
+Please refer to the terms of the MIT License, which you should have
+received along with the TractLSM.
+
+"""
+
+__title__ = "Execute TractLSM"
+__author__ = "Manon E.B. Sabot"
+__version__ = "3.0 (11.07.2021)"
+__email__ = "m.e.b.sabot@gmail.com"
+
+
+# ======================================================================
+
+# import general modules
+import argparse  # read in the set up file
+import os  # check for files and so on
+
+# own modules
+from TractLSM import InForcings  # met data & params
+from TractLSM.Utils import get_script_dir  # get this script's directory
+from TractLSM.Utils import retrieve_class, read_csv  # read in files
+from TractLSM import hrun  # run LSM for N time steps
+
+import warnings  # ignore these warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+
+# ======================================================================
+
+def main(fname, models=None, soilwater=None, canopyT=None, canopytrans=None,
+         canopygs=None, leafgs=None, photo='Farquhar', resolution=None,
+         tag=None, Nsteps=None, year=None, params=None):
+
+    """
+    Main function: checks whether the input data (os.path.isfile) and
+                   output runs exist (read_csv); if not, generates the
+                   input data (InForcings) and runs the models (run).
+
+    Arguments:
+    ----------
+    fname: string
+        input filename (with path), must be stored in the input/ folder
+
+    models: list of string
+        possibilities are the USO (Medlyn) model and the ProfitMax
+        (Sperry) model
+
+    soilwater: string
+        either the dynamic soil hydrology scheme is run, or a
+        'prescribed' soil profile is used
+
+    canopyT: string
+        either the dynamic canopy energy balance scheme is run, or a
+        'prescribed' canopy temperature is used
+
+    canopytrans: string
+        either the dynamic canopy transpiration scheme is run, or a
+        'prescribed' canopy transpiration is used
+
+    canopygs: string
+        either the dynamic stomatal conductance scheme is run, or a
+        'prescribed' canopy surface conductance is used
+
+    leafgs: string
+        either the dynamic stomatal conductance scheme is run, or a
+        'prescribed' leaf stomatal conductance is used
+
+    photo: string
+        either the Farquhar model for photosynthesis, or the Collatz
+        model
+
+    resolution: string
+        either 'low' (default), 'med', or 'high' to run the optimising
+        solver
+
+    tag: string
+        refers to the run name one wants to attribute. If not specified,
+        this is by default, based of the models run
+
+    Nsteps: int
+        must be specified if the user decides to run the models for
+        a shorter timeseries than the full length of the input
+        timeseries. If not specified, Nsteps will be
+        Ndays * Ntimesteps_per_day
+
+    year: int
+        selected run year
+
+    params: string
+        param file path, the param file can be a class or a csv file
+
+    Returns:
+    --------
+    Saves output files and figures to, respectively, the output/ folder
+    and the output/figures folder.
+
+    """
+
+    # if no input met data & environmental params exist, generate them
+    if not os.path.isfile(fname):
+        alphas = ''.join([a for a in fname if a.isalpha()])
+        no_alphas = ''.join([c for c in fname if c not in alphas])
+        no_alphas_left = ''.join(no_alphas.split('-')[:-1])
+        no_alphas_right = ''.join(no_alphas.split('-')[-1:])
+
+        if params is None:
+            params = InForcings().defparams
+
+        elif '.py' in params:
+            params = retrieve_class(params)
+
+        try:  # if doy in fname, use weather generator
+            doy = float(''.join(no_alphas_left.split('_')[-1:]))
+            Ndays = float(no_alphas_right) - doy + 1.
+
+            if (doy == year) or (Ndays == year):
+                raise ValueError
+
+            params.doy = doy - 1.  # if doy(user) = 1, it's Jan 1
+            InForcings().run(fname, params, Ndays=int(Ndays))
+
+        except ValueError:  # no doy in name, use fluxnet forcing
+            InForcings().run(fname, params, year=year)
+
+    # fname of output (fname2), based on the fname of input (fname)
+    base_dir = get_script_dir()
+
+    while 'src' in base_dir:
+        base_dir = os.path.dirname(get_script_dir())
+
+    input_dir = os.path.join(os.path.basename(base_dir), 'input')
+    output_dir = os.path.join(os.path.basename(base_dir), 'output')
+    fname2 = fname.replace(input_dir, output_dir)
+
+    # get tag for the run and add to end of output file name
+    if tag is None:
+        tag = run_tag(models, soilwater, canopyT, canopytrans, canopygs,
+                      leafgs, photo, resolution, Nsteps)
+
+    fname2 = fname2.replace('model_drivers', '%s' % (tag))
+
+    # create output_dir if it doesn't exist
+    if not os.path.isdir(os.path.dirname(fname2)):
+        try:
+            os.makedirs(os.path.dirname(fname2))
+
+        except OSError:  # handle error created by parallelisation
+            pass
+
+    # create corresponding output of standard model & opt
+    df1, __ = read_csv(fname)
+
+    if (Nsteps is None) or (Nsteps > len(df1.index)):
+        Nsteps = len(df1.index)
+
+    if models is not None:
+        df2 = hrun(fname2, df1, Nsteps, models=models, soilwater=soilwater,
+                   canopyT=canopyT, canopytrans=canopytrans, canopygs=canopygs,
+                   leafgs=leafgs, photo=photo, resolution=resolution)
+
+    else:
+        df2 = hrun(fname2, df1, Nsteps, soilwater=soilwater, canopyT=canopyT,
+                   canopytrans=canopytrans, canopygs=canopygs, leafgs=leafgs,
+                   photo=photo, resolution=resolution)
+
+    return
+
+
+# ======================================================================
+
+# ~~~ Other functions are defined here ~~~
+
+def read_var(strvar, strl):
+
+    """
+    Looks for the value of a variable in a string
+
+    Arguments:
+    ----------
+    strvar: string
+        specific var name
+
+    strl: string
+        string within which the var is being looked for
+
+    Returns:
+    --------
+    var: changing type
+        value/content of the variable
+
+    """
+
+    if strvar + ' = ' in strl:
+        var = strl.split('= ', 1)[1]
+
+        if (var == 'None') or (var == 'default') or (var == 'no'):
+            var = None
+
+        elif (strvar == 'year') or (strvar == 'Nsteps'):
+            var = int(var)
+
+        elif (strvar == 'doy') or (strvar == 'Ndays'):
+            var = float(var)
+
+        elif (strvar == 'models'):
+            if (',' in var):
+                var2 = var.split(', ')
+
+                if len(var2) < 2:  # needed on some systems
+                    var2 = var.split(',')
+
+                var = var2
+
+            else:
+                var = [var]
+
+        return var
+
+    else:
+        return
+
+
+def vars_ifile(ifile):
+
+    """
+    Reads txt file used to set up variables to run the model.
+
+    Arguments:
+    ----------
+    ifile: string
+        input filename parsed as an argument (in same dir as this
+        script)
+
+    Returns:
+    --------
+    site: string
+        either the name of the site at which the model is being run or
+        None if this is an idealised experiment
+
+    year: int
+        either a specific year that's being looked at at site level or
+        None (always None for idealised experiment)
+
+    doy: float
+        to be defined if the model is run for testing or for the purpose
+        of an idealised experiment. Start day doy = 1. is Jan 1st
+
+    Ndays: float
+        duration for which testing or an idealised experiment lasts.
+        Ndays = 2. runs for two days, start day (e.g. doy) included
+
+    params: string
+        path to the local parameter file used
+
+    Nsteps: int
+        must be specified if the user decides to run the models for
+        a shorter timeseries than the full length of the input
+        timeseries. If not specified, the full length of the timeseries
+        is run
+
+    models: list of strings
+        model configurations to be run, e.g. USO, ProfitMax
+
+    resolution: string
+        resolution for which the optimisation solver is ran. The default
+        mode is 'low', but 'med' and 'high' can also be requested
+
+    tag: string
+        refers to the run name one wants to attribute. If not specified,
+        this is by default, based of the models run
+
+    soilwater: string
+        'prescribed' forces the model to read in a soil moisture profile
+        from the drivers file. The default mode runs the soil hydrology
+        dynamically
+
+    canopyT: string
+        'prescribed' forces the model to read in canopy temperature
+        data from the drivers file. The default mode runs the canopy
+        energy balance dynamically
+
+    canopytrans: string
+        'prescribed' forces the model to read in canopy transpiration
+        data from the drivers file. The default mode runs the canopy
+        transpiration dynamically
+
+    canopygs: string
+        'prescribed' forces the model to read in canopy surface
+        conductance data from the drivers file. The default mode runs
+        the stomatal conductance dynamically
+
+    leafgs: string
+        'prescribed' forces the model to read in leaf stomatal
+        conductance data from the drivers file. The default mode runs
+        the stomatal conductance dynamically
+
+canopytrans=canopytrans, canopygs=canopygs, leafgs=leafgs
+
+    photo: string
+        either 'Farquhar' (also by default) or 'Collatz'
+
+    project: string
+        either name of the directory in which this project will be
+        stored, both in data and in output, or None
+
+    """
+
+    site = None
+    year = None
+    doy = None
+    Ndays = None
+    params = None
+    Nsteps = None
+    models = None
+    resolution = None
+    tag = None
+    soilwater = None
+    canopyT = None
+    canopytrans = None
+    canopygs = None
+    leafgs = None
+    photo = None
+    project = None
+
+    with open(ifile, 'r') as f:
+
+        for line in f:
+
+            ll = line.strip()
+
+            if not ll.startswith("#"):
+                ll = ll.rstrip()
+
+                if site is None:
+                    site = read_var('site', ll)
+
+                if year is None:
+                    year = read_var('year', ll)
+
+                if doy is None:
+                    doy = read_var('doy', ll)
+
+                if Ndays is None:
+                    Ndays = read_var('Ndays', ll)
+
+                if params is None:
+                    params = read_var('params', ll)
+
+                if Nsteps is None:
+                    Nsteps = read_var('Nsteps', ll)
+
+                if models is None:
+                    models = read_var('models', ll)
+
+                if resolution is None:
+                    resolution = read_var('resolution', ll)
+
+                if tag is None:
+                    tag = read_var('tag', ll)
+
+                if soilwater is None:
+                    soilwater = read_var('soilwater', ll)
+
+                if canopyT is None:
+                    canopyT = read_var('canopyT', ll)
+
+                if canopytrans is None:
+                    canopytrans = read_var('canopytrans', ll)
+
+                if canopygs is None:
+                    canopygs = read_var('canopygs', ll)
+
+                if leafgs is None:
+                    leafgs = read_var('leafgs', ll)
+
+                if photo is None:
+                    photo = read_var('photo', ll)
+
+                if project is None:
+                    project = read_var('project', ll)
+
+    return (site, year, doy, Ndays, params, Nsteps, models, resolution, tag,
+            soilwater, canopyT, canopytrans, canopygs, leafgs, photo, project)
+
+
+def run_tag(models, soilwater, canopyT, canopytrans, canopygs, leafgs, photo,
+            resolution, Nsteps):
+
+    """
+    Reads model names and returns the first letter of each, keeping the
+    numbers when applicable, thus creating a tag. For example, 'USO,
+    ProfitMax' yields UP.
+
+    Arguments:
+    ----------
+    models: list of string
+        models to be considered in this experiment
+
+    soilwater: string
+        soil water profile which is used, it can be dynamic (i.e, runs
+        the soil hydrology scheme), or 'prescribed'
+
+    canopyT: string
+        canopy temperature data which is used, it can be dynamic
+        (i.e, runs the canopy energy balance scheme), or 'prescribed'
+
+    canopytrans: string
+        canopy transpiration data which is used, it can be dynamic
+        (i.e, runs the canopy transpiration scheme), or 'prescribed'
+
+    canopygs: string
+        canopy surface conductance data which is used, it can be
+        dynamic (i.e, runs the stomatal conductance scheme), or
+        'prescribed'
+
+    leafgs: string
+        leaf stomatal conductance data which is used, it can be
+        dynamic (i.e, runs the stomatal conductance scheme), or
+        'prescribed'
+
+    photo: string
+        photosynthetic model used, either 'Farquhar' or 'Collatz'
+
+    resolution: string
+        resolution for which the optimisation solver is ran. The default
+        mode is 'low', but 'med' and 'high' can also be requested
+
+    Nsteps: int
+        number of steps if the user decides to run the models for a
+        shorter timeseries than the full length of the input timeseries.
+        If not specified, Nsteps will be Ndays * Ntimesteps_per_day
+
+    Returns:
+    --------
+    tag: string
+        ID of the models & configurations used for the run
+
+    """
+
+    if models is None:
+        tag = 'UP'  # default models, USO and ProfitMax
+
+    else:  # add first letter of model(s)
+        tag = ''
+
+        for i in models:
+
+            modnum = ''.join(j for j in i if j.isdigit())
+            tag += i[0] + modnum
+
+    if soilwater is None:
+        tag += '-DSH'
+
+    else:
+        tag += '-PSH'
+
+    if canopyT is None:
+        tag += '-DCT'
+
+    else:
+        tag += '-PCT'
+
+    if canopytrans is None:
+        tag += '-DE'
+
+    else:
+        tag += '-PE'
+
+    if canopygs is None:
+        tag += '-DCGs'
+
+    else:
+        tag += '-PCGs'
+
+    if leafgs is None:
+        tag += '-DLGs'
+
+    else:
+        tag += '-PLGs'
+
+    tag += '-%s' % (photo[0])
+
+    if resolution is None:
+        tag += '-Rlow'
+
+    else:
+        tag += '-R%s' % (resolution)
+
+    if Nsteps is not None:
+        tag += '-N%d' % (Nsteps)
+
+    return tag
+
+
+# ======================================================================
+
+if __name__ == "__main__":
+
+    # define the argparse settings to read run set up file
+    description = "Run the tractable LSM framework for a specific \
+                   dataset or set of conditions"
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument('ifile', type=str,
+                        help='input set up file name, e.g. irun.txt')
+    args = parser.parse_args()
+
+    # read run set up file
+    site, year, doy, Ndays, params, Nsteps, models, resolution, tag, \
+        soilwater, canopyT, canopytrans, canopygs, leafgs, photo, project = \
+            vars_ifile(args.ifile)
+
+    # fname depending on method used: fluxnet site or weather generator
+    base_dir = get_script_dir()
+
+    while 'src' in base_dir:
+        base_dir = os.path.dirname(get_script_dir())
+
+    fname = os.path.join(base_dir, 'input')  # input data dir path
+
+    if project is not None:  # input data for specific project
+        fname = os.path.join(fname, os.path.join('projects', project))
+
+    if not os.path.isdir(fname):  # create dir if it doesn't exist
+        try:
+            os.makedirs(fname)
+
+        except OSError:  # handle error created by parallelisation
+            pass
+
+    # name of input data file to work with
+    if site is not None:
+        if year is None:
+            fname = os.path.join(fname, '%s_model_drivers.csv' % (site))
+
+        else:
+            fname = os.path.join(fname, '%s_model_driver_%d.csv' % (site,
+                                                                    year))
+
+    else:
+        days = str(int(doy)) + '-' + str(int(doy + Ndays - 1))
+        fname = os.path.join(fname, 'WG_model_drivers_%s.csv' % (days))
+
+    # call the main function depending on declared vars
+    if photo is not None:
+        main(fname, models=models, soilwater=soilwater, canopyT=canopyT,
+             canopytrans=canopytrans, canopygs=canopygs, leafgs=leafgs,
+             photo=photo, resolution=resolution, tag=tag, Nsteps=Nsteps,
+             year=year, params=params)
+
+    if photo is None:
+        main(fname, models=models, soilwater=soilwater, canopyT=canopyT,
+             canopytrans=canopytrans, canopygs=canopygs, leafgs=leafgs,
+             resolution=resolution, tag=tag, Nsteps=Nsteps, year=year,
+             params=params)

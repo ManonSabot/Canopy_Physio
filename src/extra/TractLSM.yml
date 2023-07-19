@@ -1,0 +1,9 @@
+name: TractLSM38
+channels:
+  - defaults
+dependencies:
+  - python=3.8
+  - pandas
+  - xarray
+  - scipy
+prefix: /home/mebs/miniconda3/envs/TractLSM38
