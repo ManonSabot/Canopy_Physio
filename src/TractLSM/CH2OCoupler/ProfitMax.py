@@ -586,7 +586,13 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
         trans_can = [trans * e for e in fscale2can]
 
     else:
-        trans_can = [conv.FROM_MILI * p.E * np.ones(1) * e for e in fscale2can]
+        trans_can = [conv.FROM_MILI * float(p.E) * np.ones_like(trans) *
+                     e for e in fscale2can]
+        idx = np.nanargmin(np.abs(trans - conv.FROM_MILI * float(p.E)))
+        trans_can[0][:idx] = np.nan
+        trans_can[1][:idx] = np.nan
+        trans_can[0][idx + 1:] = np.nan
+        trans_can[1][idx + 1:] = np.nan
 
     # sunlit / shaded loop, two assimilation streams
     for i in range(len(fRcan)):
@@ -613,7 +619,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                 Tleaf[i] = p.Tleaf  # deg C
 
             elif not calc_trans:
-                Tleaf[i], __ = leaf_temperature(p, conv.FROM_MILI * p.E)
+                Tleaf[i], __ = leaf_temperature(p, conv.FROM_MILI * float(p.E))
 
             else:
                 Tleaf[i] = p.Tair  # deg C
@@ -670,7 +676,8 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                     gains *= -1.
 
                 # trans, hydraulic cost, and associated functions
-                Ecan = trans_A(p, A, Cis, Dleaf, gs_can[i], gb)
+                Ecan = trans_A(p, A, Cis, Dleaf, gs_can[i], gb)  # mol m-2 s-1
+                Ecan[Ecan < 0.] = cst.zero
                 idxs = [np.nanargmin(np.abs(e - trans)) for e in Ecan]
                 costs = np.array([cost[idxs]][0])
                 LWPs = np.array([P[idxs]][0])
@@ -687,16 +694,12 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                     mask = np.logical_and(np.logical_and(Ecan[1:] >= cst.zero,
                                           LWPs[1:] >= P[-1]),
                                           np.logical_and(gc[1:] >= cst.zero,
-                                          np.logical_and(Cis[1:] / p.CO2 <
-                                          0.95, gs[1:] <= (conv.GbvGbc /
-                                          conv.GwvGc) * gb)))
+                                          Cis[1:] / p.CO2 < 0.95))
 
                 else:
                     mask = np.logical_and(np.logical_and(Ecan[1:] >= cst.zero,
                                           LWPs[1:] >= P[-1]),
-                                          np.logical_and(Cis[1:] / p.CO2 <
-                                          0.95, gs_can[i] <= (conv.GbvGbc /
-                                          conv.GwvGc) * gb))
+                                          Cis[1:] / p.CO2 < 0.95)
 
                 profit_check = profit[1:][mask]
 
@@ -717,7 +720,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                                                              gs_can[i])
 
                         if not calc_trans:
-                            E[i] = conv.FROM_MILI * p.E
+                            E[i] = conv.FROM_MILI * float(p.E)
 
                         new_Tleaf, gb = leaf_temperature(p, E[i], gs=gs_can[i],
                                                          Tleaf=Tleaf[i],
@@ -789,7 +792,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
 
                     elif not calc_trans:
                         Tleaf[i], __ = leaf_temperature(p,
-                                                        conv.FROM_MILI * p.E)
+                                                        conv.FROM_MILI * float(p.E))
 
                     else:
                         Tleaf[i] = p.Tair
@@ -803,7 +806,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                     Tleaf[i] = p.Tleaf  # deg C
 
                 elif not calc_trans:
-                    E[i] = conv.FROM_MILI * p.E
+                    E[i] = conv.FROM_MILI * float(p.E)
                     Tleaf[i], __ = leaf_temperature(p, E[i])
 
                 else:

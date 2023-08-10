@@ -529,19 +529,29 @@ def water_potential(p, sw):
 
     """
 
-    if (sw is not None) and (sw >= cst.zero):
+    try:
+        if (sw is not None) and (sw >= cst.zero):
 
-        if sw <= p.pwp:
+            if sw <= p.pwp:
 
-            Psiw = p.Psie * (p.pwp / p.theta_sat) ** (-p.bch)
+                Psiw = p.Psie * (p.pwp / p.theta_sat) ** (-p.bch)
 
-            return (-10. ** ((np.log10(-Psiw / conv.cmH2O_TO_MPa) - 6.8)
-                             * sw / p.pwp + 6.8)) * conv.cmH2O_TO_MPa
+                return (-10. ** ((np.log10(-Psiw / conv.cmH2O_TO_MPa) - 6.8)
+                                 * sw / p.pwp + 6.8)) * conv.cmH2O_TO_MPa
 
-        return p.Psie * (sw / p.theta_sat) ** (-p.bch)
+            return p.Psie * (sw / p.theta_sat) ** (-p.bch)
 
-    elif np.isclose(abs(p.Ps), 0., rtol=cst.zero, atol=cst.zero):
+        elif np.isclose(abs(p.Ps), 0., rtol=cst.zero, atol=cst.zero):
 
-        return p.Psie
+            return p.Psie
+
+    except ValueError:
+
+        Psiw = p.Psie * (sw / p.theta_sat) ** (-p.bch)
+        Psiw[sw <= p.pwp] = p.Psie * (p.pwp / p.theta_sat) ** (-p.bch)
+        Psiw[sw <= p.pwp] = (-10. ** ((np.log10(-Psiw / conv.cmH2O_TO_MPa)
+                             - 6.8) * sw / p.pwp + 6.8)) * conv.cmH2O_TO_MPa
+
+        return Psiw
 
     return p.theta_sat * (p.Ps / p.Psie) ** (-1. / p.bch)

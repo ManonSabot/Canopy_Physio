@@ -15,7 +15,7 @@
 # meteorological forcing to run the model. In that case, the year must be set
 # to 'None'.
 
-site = Example
+site = C01
 year = None
 
 
@@ -50,7 +50,7 @@ params = default
 # specify the number of timesteps if must be run for. If no timestep number is
 # specified, the full length of the timeseries is run.
 
-Nsteps = 100
+Nsteps = 48
 
 
 # The models switch allows you to pick the C-H2O flux solver(s). If the switch
@@ -59,35 +59,35 @@ Nsteps = 100
 # Possible choices are: 'USO', 'ProfitMax'; any of those two configurations can
 # be run alone.
 
-models = USO, ProfitMax
+models = ProfitMax
 
 
 # The default model configuration runs a dynamic soil hydrology scheme.
 # However, soil moisture can be included in the forcing file, and the model can
 # be run with this driver by setting soilwater to 'prescribed'.
 
-soilwater = default
+soilwater = prescribed
 
 
 # The default model configuration runs a dynamic canopy energy balance scheme.
 # However, canopy temperature can be included in the forcing file, and the model
 # can be run with this driver by setting canopyT to 'prescribed'.
 
-canopyT = prescribed
+canopyT = default
 
 
 # The default model configuration runs a dynamic canopy transpiration scheme.
 # However, transpiration can be included in the forcing file, and the model can
 # be run with this driver by setting canopytrans to 'prescribed'.
 
-canopytrans = default
+canopytrans = prescribed
 
 
 # The default model configuration runs a dynamic stomatal conductance scheme.
 # However, gsurf (and gs or gb) can be included in the forcing file, and the
 # model can be run with this driver by setting canopygs to 'prescribed'.
 
-canopygs = prescribed
+canopygs = default
 
 
 # The default model configuration runs a dynamic stomatal conductance scheme.
@@ -129,4 +129,4 @@ tag = default
 # are stored in folders named after the project, i.e., input/project1/ and
 # output/project1/.
 
-project = Example
+project = WTC4_C01
