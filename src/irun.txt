@@ -15,7 +15,7 @@
 # meteorological forcing to run the model. In that case, the year must be set
 # to 'None'.
 
-site = C01
+site = C02
 year = None
 
 
@@ -47,10 +47,10 @@ params = default
 
 # If you do not want to run the model for the full length of the timeseries
 # (e.g., only running for the first 10 hours for testing purposes), you must
-# specify the number of timesteps if must be run for. If no timestep number is
+# specify the number of timesteps it must be run for. If no timestep number is
 # specified, the full length of the timeseries is run.
 
-Nsteps = 48
+Nsteps = default
 
 
 # The models switch allows you to pick the C-H2O flux solver(s). If the switch
@@ -129,4 +129,4 @@ tag = default
 # are stored in folders named after the project, i.e., input/project1/ and
 # output/project1/.
 
-project = WTC4_C01
+project = WTC4
