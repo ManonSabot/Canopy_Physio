@@ -77,7 +77,7 @@ def Weibull_params(p):
 
             try:
                 if (int(str(params)[1:3])) and (len(str(params)) == 3):
-                    x += [float(str(params)[1:3])]
+                    x += [abs(float(str(params)[1:3]))]
 
             except ValueError:
                 pass

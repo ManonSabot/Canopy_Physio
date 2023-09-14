@@ -242,7 +242,7 @@ def arrhen(v25, Ea, Tref, Tleaf, deltaS=None, Hd=None):
         return arrhenius * arg2 / arg3
 
 
-def adjust_low_T(var, Tleaf, lower_bound=2., upper_bound=10.):
+def adjust_low_T(var, Tleaf, lower_bound=0., upper_bound=8.):
 
     """
     Function linearly forcing a variable to zero at low temperature
@@ -297,7 +297,7 @@ def foliar_resp(p, Tleaf):
     """
     Calculates the foliar respiration of plants given a reference
     temperature and a reference respiration rate, as proposed by
-    Tjoelker et al., 2001.
+    Heskel et al., 2016.
 
     Arguments:
     ----------
@@ -313,9 +313,10 @@ def foliar_resp(p, Tleaf):
 
     """
 
-    Q10 = 3.22 - 0.046 * Tleaf  # ratio of respiration T:(T - 10.)
+    Rd = p.Rlref * np.exp(0.1012 * (Tleaf - p.TRlref) - 5.e-4 *
+                          (Tleaf ** 2 - p.TRlref ** 2))
 
-    return p.Rlref * Q10 ** ((Tleaf - p.TRlref) / 10.)
+    return Rd
 
 
 def quad(a, b, c, large_root=True):
