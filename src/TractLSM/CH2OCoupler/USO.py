@@ -192,6 +192,13 @@ def solve_uso(p, photo='Farquhar', threshold_conv=0.015, iter_max=40,
 
     """
 
+    # photo threshold: depending on run mode
+    if any([not calc_trans, not calc_Gsurf, not calc_gs]):
+        PAR_thresh = 0.  # umol m-2 s-1
+
+    else:  # fully dynamical model
+        PAR_thresh = 50.  # umol m-2 s-1
+
     # retrieve sunlit / shaded fractions
     fRcan, fPPFD, fLAI, fscale2can, fgradis = absorbed_radiation_2_leaves(p)
 
@@ -229,7 +236,7 @@ def solve_uso(p, photo='Farquhar', threshold_conv=0.015, iter_max=40,
         p.scale2can = fscale2can[i]
         p.gradis = fgradis[i]
 
-        if p.PPFD > 50.:  # min threshold for photosynthesis
+        if p.PPFD > PAR_thresh:  # min threshold for photosynthesis
             fw = np.maximum(cst.zero,
                             np.minimum(1., np.exp((p.Ps + p.nPs) * p.sfw)))
             Cs = p.CO2  # Pa

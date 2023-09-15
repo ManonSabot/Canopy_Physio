@@ -550,7 +550,12 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
 
     """
 
-    success = True  # initial assumption: the optimisation will succeed
+    # photo threshold for opt: depending on run mode
+    if any([not calc_trans, not calc_Gsurf, not calc_gs]):
+        PAR_thresh = 0.  # umol m-2 s-1
+
+    else:  # fully dynamical model
+        PAR_thresh = 50.  # umol m-2 s-1
 
     # retrieve relevant sunlit / shaded fractions
     fRcan, fPPFD, fLAI, fscale2can, fgradis = absorbed_radiation_2_leaves(p)
@@ -587,15 +592,20 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
 
     else:
         trans_can = [conv.FROM_MILI * float(p.E) * np.ones_like(trans) *
-                     e for e in fscale2can]
-        idx = np.nanargmin(np.abs(trans - conv.FROM_MILI * float(p.E)))
+                     e / LAI for e in fscale2can]
+
+        # exclude values that are not the actual trans from our 'stream'
+        idx = bn.nanargmin(np.abs(trans * fscale2can[0] - trans_can[0]))
         trans_can[0][:idx] = np.nan
-        trans_can[1][:idx] = np.nan
         trans_can[0][idx + 1:] = np.nan
+        idx = bn.nanargmin(np.abs(trans * fscale2can[1] - trans_can[1]))
+        trans_can[1][:idx] = np.nan
         trans_can[1][idx + 1:] = np.nan
 
     # sunlit / shaded loop, two assimilation streams
     for i in range(len(fRcan)):
+
+        success = True  # init. assumption: optimisation will succeed
 
         if i == 0:  # sunlit
             fvc_opt = p.fvc_sun
@@ -612,14 +622,14 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
         cost = np.ma.copy(COST)
         vc = np.ma.copy(VC)
 
-        if p.PPFD > 50.:  # min threshold for photosynthesis
+        if p.PPFD > PAR_thresh:  # min photosynthesis threshold for opt.
             Cs = p.CO2  # Pa
 
             if not calc_temp:
                 Tleaf[i] = p.Tleaf  # deg C
 
             elif not calc_trans:
-                Tleaf[i], __ = leaf_temperature(p, conv.FROM_MILI * float(p.E))
+                Tleaf[i], __ = leaf_temperature(p, trans[~np.isnan(trans)][0])
 
             else:
                 Tleaf[i] = p.Tair  # deg C
@@ -663,10 +673,11 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                                                         Tleaf=Tleaf[i])
 
                 else:
-                    A, __, __, __ = \
-                        calc_photosynthesis(p, 0., Cis, photo, Tleaf=Tleaf[i],
-                                            gsc=conv.U * conv.GcvGw *
-                                                gs_can[i])
+                    A, __, __, __ = calc_photosynthesis(p, 0., Cis, photo,
+                                                        Tleaf=Tleaf[i],
+                                                        gsc=conv.U *
+                                                            conv.GcvGw *
+                                                            gs_can[i])
 
                 # photo gain
                 gains = A / np.ma.amax(A)
@@ -675,14 +686,29 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                 if np.ma.amax(A) < 0.:
                     gains *= -1.
 
-                # trans, hydraulic cost, and associated functions
-                Ecan = trans_A(p, A, Cis, Dleaf, gs_can[i], gb)  # mol m-2 s-1
-                Ecan[Ecan < 0.] = cst.zero
-                idxs = [np.nanargmin(np.abs(e - trans)) for e in Ecan]
-                costs = np.array([cost[idxs]][0])
-                LWPs = np.array([P[idxs]][0])
-                transcan = np.array([trans[idxs]][0])
-                vcs = np.array([vc[idxs]][0])
+                # trans associated with A, mol m-2 s-1
+                Ecan = trans_A(p, A, Cis, Dleaf, gs_can[i], gb)
+
+                if not calc_trans:  # restrict to max. possible gain
+                    idx = np.unique([bn.nanargmin(np.abs(Ecan - e))
+                                     for e in trans[~np.isnan(trans)]])[0]
+                    Cis = Cis[:idx + 1]
+                    gains = gains[:idx + 1]
+                    Ecan = Ecan[:idx + 1]
+
+                    # only one possible cost matched to all gains
+                    costs = np.zeros(len(Cis)) + cost[~np.isnan(trans)][0]
+                    vcs = np.zeros(len(Cis)) + vc[~np.isnan(trans)][0]
+                    LWPs = np.zeros(len(Cis)) + P[~np.isnan(trans)][0]
+                    transcan = np.zeros(len(Cis)) + trans[~np.isnan(trans)][0]
+
+                else:  # match full cost stream to full gain stream
+                    idxs = [bn.nanargmin(np.abs(e - trans[~np.isnan(trans)]))
+                            for e in Ecan]
+                    costs = np.array([cost[idxs]][0])
+                    vcs = np.array([vc[idxs]][0])
+                    LWPs = np.array([P[idxs]][0])
+                    transcan = np.array([trans[idxs]][0])
 
                 # look for the most net profit
                 profit = gains - costs
@@ -690,16 +716,15 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                 # deal with edge cases by rebounding the solution
                 gc, gs, gb = leaf_energy_balance(p, transcan)
 
-                if calc_gs and calc_Gsurf:
-                    mask = np.logical_and(np.logical_and(Ecan[1:] >= cst.zero,
-                                          LWPs[1:] >= P[-1]),
+                if calc_gs and calc_Gsurf and calc_trans:
+                    mask = np.logical_and(np.logical_and(LWPs[1:] >= P[-1],
+                                          transcan[1:] >= cst.zero),
                                           np.logical_and(gc[1:] >= cst.zero,
                                           Cis[1:] / p.CO2 < 0.95))
 
                 else:
-                    mask = np.logical_and(np.logical_and(Ecan[1:] >= cst.zero,
-                                          LWPs[1:] >= P[-1]),
-                                          Cis[1:] / p.CO2 < 0.95)
+                    mask = np.logical_and(LWPs[1:] >= P[-1],
+                                          transcan[1:] >= cst.zero)
 
                 profit_check = profit[1:][mask]
 
@@ -719,8 +744,9 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                         E[i], real_zero, gw, gb = trans_Ebal(p, Tleaf[i],
                                                              gs_can[i])
 
-                        if not calc_trans:
-                            E[i] = conv.FROM_MILI * float(p.E)
+                        if not calc_trans:  # prescribed value
+                            E[i] = transcan[iopt[0]]
+                            real_zero = True
 
                         new_Tleaf, gb = leaf_temperature(p, E[i], gs=gs_can[i],
                                                          Tleaf=Tleaf[i],
@@ -738,27 +764,27 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                                             p.CO2 - boundary_CO2))
 
                         # new Dleaf
-                        if calc_temp and calc_trans and (np.isclose(trans[i],
+                        if calc_temp and calc_trans and (np.isclose(E[i],
                                 cst.zero, rtol=cst.zero, atol=cst.zero) or
                                 np.isclose(gw, cst.zero, rtol=cst.zero,
-                                atol=cst.zero) or np.isclose(gs[i], cst.zero,
-                                rtol=cst.zero, atol=cst.zero)):
+                                atol=cst.zero) or np.isclose(gs_can[i],
+                                cst.zero, rtol=cst.zero, atol=cst.zero)):
                             Dleaf = np.maximum(0.05, p.VPD)  # kPa
 
                         else:
                             esat_l = vpsat(new_Tleaf)
                             Dleaf = (esat_l - (esat_a - np.maximum(0.05,
-                                         p.VPD)))
+                                     p.VPD)))
 
-                        # force stop when E < 0. (non-physical)
+                        # force stop when ini. E < 0. (non-physical)
                         if (iter < 1) and (not real_zero):
                             real_zero = None
 
                         # check for convergence
                         if ((real_zero is None) or (iter > iter_max) or
-                                ((real_zero) and (abs(Tleaf[i] - new_Tleaf) <=
-                                threshold_conv) and not np.isclose(gs[i],
-                                cst.zero, rtol=cst.zero, atol=cst.zero))):
+                           ((real_zero) and (abs(Tleaf[i] - new_Tleaf) <=
+                           threshold_conv) and not np.isclose(gs_can[i],
+                           cst.zero, rtol=cst.zero, atol=cst.zero))):
                             break
 
                         if calc_temp and calc_trans:
@@ -770,20 +796,25 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                         raise ValueError()
 
                 except (ValueError, TypeError):  # no opt
-                    if iter < 1 or real_zero:  # no prev. valid outcomes
+                    if (iter < 1) or real_zero:  # no prev. valid outcome
                         success = False
 
                     break
 
-            if not success:  # this is rare, use last opt vc
-                idx = bn.nanargmin(abs(vc - fvc_opt))
+            if not success:  # rare, typically due to very low light
+                if not calc_trans:  # prescribed value
+                    idx = np.argwhere(~np.isnan(trans))[0]
+
+                else:  # use last opt vc if possible
+                    idx = bn.nanargmin(abs(vc - fvc_opt))
+
                 fvc[i] = vc[idx]
                 __, gs_can[i], __ = leaf_energy_balance(p, trans[idx])
                 __, Ci_can[i] = photo_gain(p, np.asarray([trans[idx]]), photo,
                                            res, False, solstep)
                 Ci_can[i] = Ci_can[0]  # a single value is returned
 
-                if Ci_can[i] >= 0.95:  # no solve
+                if Ci_can[i] / p.CO2 >= 0.95:  # no solve
                     Ci_can[i] = np.nan
 
                 if (str(Ci_can[i]) == '--'):  # no valid Ci
@@ -791,8 +822,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                         Tleaf[i] = p.Tleaf  # deg C
 
                     elif not calc_trans:
-                        Tleaf[i], __ = leaf_temperature(p,
-                                                        conv.FROM_MILI * float(p.E))
+                        Tleaf[i], __ = leaf_temperature(p, trans[idx][0])
 
                     else:
                         Tleaf[i] = p.Tair
@@ -806,7 +836,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                     Tleaf[i] = p.Tleaf  # deg C
 
                 elif not calc_trans:
-                    E[i] = conv.FROM_MILI * float(p.E)
+                    E[i] = trans[idx][0]
                     Tleaf[i], __ = leaf_temperature(p, E[i])
 
                 else:
@@ -833,7 +863,8 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
 
                 gs_can[i], E[i], An[i], Ci_can[i], Rleaf[i] = (0., ) * 5
 
-            if calc_trans and calc_Gsurf and calc_gs and np.isclose(E[i], 0.):
+            if (calc_trans and calc_Gsurf and calc_gs and
+                np.isclose(E[i], cst.zero, rtol=cst.zero, atol=cst.zero)):
                 if calc_temp:
                     Tleaf[i] = p.Tair
 
@@ -849,10 +880,10 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
     # deal with no solves for Pleaf
     Pleaf[Pleaf > p.Ps] = p.Ps
 
-    if np.isclose(np.nanmean(Pleaf), p.Ps):
-        E_can, gs_can, Pleaf_can, An_can, Ci_can, Tleaf_can, Rleaf_can = \
-            (0., ) * 7
-        rublim_can = -9999.
+    if (calc_trans and calc_Gsurf and calc_gs and
+        np.isclose(np.nanmean(Pleaf), p.Ps)):
+        (E_can, gs_can, Pleaf_can, An_can, Ci_can, Tleaf_can, Rleaf_can,
+         rublim_can) = (0., ) * 8
 
     else:  # merge contributions from sunlit and shaded leaves
         with np.errstate(invalid='ignore'):  # nans, no warning
@@ -861,6 +892,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
             gs_can[np.isclose(gs_can, 0.)] = np.nan
             Pleaf[np.isclose(Pleaf, p.Ps)] = np.nan
             Ci_can[np.isclose(Ci_can, 0.)] = np.nan
+            Ci_can[np.isclose(Ci_can, p.CO2)] = np.nan
             Tleaf[np.isclose(Tleaf, 0.)] = np.nan
 
             # total contributions
@@ -887,7 +919,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
             (0., ) * 7
 
     if np.isnan(Pleaf_can):
-        Pleaf_can = 0.
+        Pleaf_can = p.Ps
 
     return (fvc, p.kmax * VC[0], E_can, gs_can, Pleaf_can, An_can, Ci_can,
             rublim_can, Tleaf_can, Rleaf_can)

@@ -313,8 +313,8 @@ def foliar_resp(p, Tleaf):
 
     """
 
-    Rd = p.Rlref * np.exp(0.1012 * (Tleaf - p.TRlref) - 5.e-4 * (Tleaf ** 2 -
-                                                                 p.TRlref ** 2))
+    Rd = p.Rlref * np.exp(0.1012 * (Tleaf - p.TRlref) - 5.e-4 *
+                          (Tleaf ** 2 - p.TRlref ** 2))
     return Rd
 
 

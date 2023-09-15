@@ -264,8 +264,14 @@ def over_time(df, step, Nsteps, dic, photo, resolution, calc_sw, calc_canT,
             dic[key]['Ps'] = p.Ps
             dic[key]['Es'] = soil_evap(p, dic[key]['sw0'])  # mmol m-2 s-1
 
-     # no photosynthesis under these conditions
-    if (p.PPFD <= 50.) or (p.VPD <= 0.05) or (p.LAI <= 0.001):
+    if any([not calc_canE, not calc_canGs, not calc_leafGs]):
+        PAR_thresh = 0.1  # light cutoff threshold for calculations
+
+    else:
+        PAR_thresh = 50.
+
+    # no photosynthesis or trans under these conditions
+    if (p.PPFD <= PAR_thresh) or (p.VPD <= 0.05) or (p.LAI <= 0.001):
 
         for key in dic.keys():
 
