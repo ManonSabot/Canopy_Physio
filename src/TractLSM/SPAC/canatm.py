@@ -256,6 +256,7 @@ def conductances(p, Tleaf=None, gs=None):
     # boundary layer cond to forced convect. (Campbell & Norman, 1998)
     d = 0.72 * p.max_leaf_width  # leaf width, m
     reynolds = p.u * d / nu  # unitless
+    #reynolds = 10000.
     gHa = (0.664 * cmolar * cst.DH * reynolds ** 0.5 * prandtl ** (1. / 3.)
            / d)
 

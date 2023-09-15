@@ -720,9 +720,7 @@ def maximise_profit(p, photo='Farquhar', res='low', solstep='var',
                     mask = np.logical_and(np.logical_and(LWPs[1:] >= P[-1],
                                           transcan[1:] >= cst.zero),
                                           np.logical_and(gc[1:] >= cst.zero,
-                                          np.logical_and(Cis[1:] / p.CO2 <
-                                          0.95, gs[1:] <= (conv.GbvGbc /
-                                          conv.GwvGc) * gb)))
+                                          Cis[1:] / p.CO2 < 0.95))
 
                 else:
                     mask = np.logical_and(LWPs[1:] >= P[-1],
