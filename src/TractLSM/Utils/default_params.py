@@ -127,11 +127,20 @@ class default_params(object):  # default inputs needed to run model
         self.chi_l = 9.99999978e-3  # leaf angle dist (spherical = 0)
         self.kn = 0.001  # extinction coef. of nitrogren (CABLE)
 
+        # leaf thermal cost parameters (Camille's model)
+        self.T50 = 35.  #
+        self.Tcrit = 45.  #
+
         # hydraulics
         self.P50 = 6.6  # xylem pressure at P50 (-MPa) - J. virginiana
         self.P88 = 10.5  # same at P88 (-MPa) (Choat et al.)
         self.kmax = 1.  # max plant hydr cond / LAI (mmol m-2 s-1 MPa-1)
         self.ratiocrit = 0.05  # Pcrit; stom control? kcrit = N%(kmax)
+
+        # cuticular conductance (Camille's model)
+        self.gmin20 = 1.e-6  # cuticular conduc @ 25 degC (mol m-2 s-1)
+        self.gminTp = 1.e-6  # cuticular conduc @ Tp degC (mol m-2 s-1)
+        self.Tp = 35.  # T above which gmin increases sharply (degC)
 
         # stomatal conductance
         self.g1 = 2.35  # sensitivity of stomatal conduc to An (kPa0.5)

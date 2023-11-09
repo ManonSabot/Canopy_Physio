@@ -431,10 +431,11 @@ def add_vars_to_csv(fname, d):
                'TRlref', 'Kc25', 'Ko25', 'alpha', 'c1', 'c2', 'c3', 'c4',
                'eps_l', 'eps_s', 'albedo_l', 'albedo_l2', 'albedo_ws',
                'albedo_ds', 'tau_l', 'chi_l', 'kn', 'Ev', 'Ej', 'Egamstar',
-               'Ec', 'Eo', 'deltaSv', 'deltaSj', 'Hdv', 'Hdj', 'P50', 'P88',
-               'kmax', 'ratiocrit', 'g1', 'sfw', 'nPs', 'ground_area', 'Ztop',
-               'Zbottom', 'root_beta', 'Psie', 'Ps', 'hyds', 'theta_sat', 'fc',
-               'pwp', 'bch', 'r_soil']
+               'Ec', 'Eo', 'deltaSv', 'deltaSj', 'Hdv', 'Hdj', 'T50', 'Tcrit',
+               'P50', 'P88', 'kmax', 'ratiocrit', 'gmin20', 'gminTp', 'Tp',
+               'g1', 'sfw', 'nPs', 'ground_area', 'Ztop', 'Zbottom',
+               'root_beta', 'Psie', 'Ps', 'hyds', 'theta_sat', 'fc', 'pwp',
+               'bch', 'r_soil']
     units = ['[kPa]', '[m s-1]', '[Pa]', '[kPa]', '[m2 m-2]', '[m]',
              '[mm d-1]', '[-]', '[umol s-1 m-2]', '[Pa]', '[deg C]', '[-]',
              '[umol s-1 m-2]', '[deg C]', '[Pa]', '[Pa]',
@@ -442,7 +443,8 @@ def add_vars_to_csv(fname, d):
              '[-]', '[-]', '[-]', '[-]', '[-]', '[-]', '[-]', '[-]',
              '[J mol-1]', '[J mol-1]', '[J mol-1]', '[J mol-1]', '[J mol-1]',
              '[J mol-1 K-1]', '[J mol-1 K-1]', '[J mol-1]', '[J mol-1]',
-             '[-MPa]', '[-MPa]', '[mmol m-2 s-1 MPa-1]', '[-]', '[kPa0.5]',
+             '[deg C]', '[deg C]', '[-MPa]', '[-MPa]', '[mmol m-2 s-1 MPa-1]',
+             '[-]', '[mol m-2 s-1]', '[mol m-2 s-1]', '[deg C]', '[kPa0.5]',
              '[-]', '[MPa]', '[m2]', '[m]', '[m]', '[1^(cm-1)]', '[MPa]',
              '[MPa]', '[m s-1]', '[m3 m-3]', '[m3 m-3]', '[m3 m-3]',  '[-]',
              '[-]']
@@ -455,10 +457,11 @@ def add_vars_to_csv(fname, d):
                              d.albedo_l, d.albedo_l2, d.albedo_ws, d.albedo_ds,
                              d.tau_l, d.chi_l, d.kn, d.Ev, d.Ej, d.Egamstar,
                              d.Ec, d.Eo, d.deltaSv, d.deltaSj, d.Hdv, d.Hdj,
-                             d.P50, d.P88, d.kmax, d.ratiocrit, d.g1, d.sfw,
-                             d.nPs, d.ground_area, d.Ztop, d.Zbottom,
-                             d.root_beta, d.Psie, d.Ps, d.hyds, d.theta_sat,
-                             d.fc, d.pwp, d.bch, d.r_soil)], columns=columns)
+                             d.T50, d.Tcrit, d.P50, d.P88, d.kmax, d.ratiocrit,
+                             d.gmin20, d.gminTp, d.Tp, d.g1, d.sfw, d.nPs,
+                             d.ground_area, d.Ztop, d.Zbottom, d.root_beta,
+                             d.Psie, d.Ps, d.hyds, d.theta_sat, d.fc, d.pwp,
+                             d.bch, d.r_soil)], columns=columns)
 
     except AttributeError:  # always yield error if d is csv
         mismatch = True  # diffs if d is obj? all params must be present
@@ -471,8 +474,9 @@ def add_vars_to_csv(fname, d):
                              d2.albedo_l, d2.albedo_l2, d2.albedo_ws,
                              d2.albedo_ds, d2.tau_l, d2.chi_l, d2.kn, d2.Ev,
                              d2.Ej, d2.Egamstar, d2.Ec, d2.Eo, d2.deltaSv,
-                             d2.deltaSj, d2.Hdv, d2.Hdj, d2.P50, d2.P88,
-                             d2.kmax, d2.ratiocrit, d2.g1, d2.sfw, d2.nPs,
+                             d2.deltaSj, d2.Hdv, d2.Hdj, d2.T50, d2.Tcrit,
+                             d2.P50, d2.P88, d2.kmax, d2.ratiocrit, d2.gmin20,
+                             d2.gminTp, d2.Tp, d2.g1, d2.sfw, d2.nPs,
                              d2.ground_area, d2.Ztop, d2.Zbottom, d2.root_beta,
                              d2.Psie, d2.Ps, d2.hyds, d2.theta_sat, d2.fc,
                              d2.pwp, d2.bch, d2.r_soil)],
